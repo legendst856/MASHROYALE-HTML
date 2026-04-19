@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-select=none">
+    <title>MashRoyale Universe</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Bangers&family=Open+Sans:wght@600;800&display=swap');
+        
+        :root {
+            --bronz: #cd7f32; --silv: #bdc3c7; --gold: #fbc531; --diam: #3498db;
+            --purple: #9c88ff; --dark: #2f3640; --bg: #1e272e;
+        }
+
+        body { margin: 0; background: #000; font-family: 'Open Sans', sans-serif; color: white; overflow: hidden; }
+        #app-container { width: 100%; max-width: 480px; height: 100vh; position: relative; background: var(--bg); margin: auto; display: flex; flex-direction: column; }
+
+        /* --- SISTEMA DE LOGIN --- */
+        #login-screen { position: absolute; inset: 0; background: var(--bg); z-index: 2000; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; }
+        input { padding: 12px; border-radius: 8px; border: none; width: 80%; margin: 10px 0; font-size: 16px; }
+
+        /* --- HEADER COMÚN --- */
+        header { padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.6); border-bottom: 2px solid #333; z-index: 10; }
+        .currency { display: flex; gap: 12px; font-weight: 800; font-size: 13px; }
+
+        /* --- CONTENEDOR DE PÁGINAS --- */
+        #page-container { flex: 1; position: relative; overflow-y: auto; padding-bottom: 80px; }
+        .view { display: none; padding: 20px; box-sizing: border-box; }
+        .active-view { display: block; }
+
+        /* --- ESTILOS DE CARTAS (PÁGINA MAZOS) --- */
+        .card-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        .card { background: #353b48; border-radius: 12px; padding: 10px; text-align: center; position: relative; border: 3px solid #555; }
+        .card.in-deck { border-color: var(--gold); background: #4b6584; }
+        .rare-bronz { border-color: var(--bronz); } .rare-silv { border-color: var(--silv); }
+        .rare-gold { border-color: var(--gold); } .rare-diam { border-color: var(--diam); box-shadow: 0 0 10px var(--diam); }
+        .lvl-tag { position: absolute; top: -5px; right: -5px; background: white; color: black; padding: 2px 5px; border-radius: 6px; font-size: 9px; font-weight: 900; }
+
+        /* --- TIENDA --- */
+        .shop-item { background: #2f3640; border-radius: 12px; padding: 15px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-left: 5px solid var(--gold); }
+        .btn-upgrade { background: var(--gold); border: none; padding: 8px 12px; border-radius: 5px; font-weight: 800; cursor: pointer; }
+
+        /* --- PASE DE BATALLA --- */
+        .pass-row { background: rgba(255,255,255,0.05); margin: 5px 0; padding: 15px; border-radius: 10px; display: flex; align-items: center; justify-content: space-between; }
+        .locked { opacity: 0.5; filter: grayscale(1); }
+
+        /* --- NAV INFERIOR --- */
+        nav { position: absolute; bottom: 0; width: 100%; height: 70px; background: #2f3640; display: flex; border-top: 2px solid #111; z-index: 1000; }
+        .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; color: #7f8c8d; font-size: 11px; font-weight: 800; }
+        .nav-item.active { color: var(--gold); background: rgba(255,255,255,0.05); }
+
+        /* --- BATALLA --- */
+        #battle-overlay { display: none; position: absolute; inset: 0; z-index: 3000; background: #000; }
+        .battle-ui { position: absolute; bottom: 0; width: 100%; padding: 10px; background: rgba(0,0,0,0.8); display: flex; flex-direction: column; gap: 10px; }
+    </style>
+</head>
+<body>
+
+<div id="app-container">
+    <div id="login-screen">
+        <h1 style="font-family:'Bangers'; font-size: 50px; color: var(--gold);">MASHROYALE</h1>
+        <p>Introduce tu nombre para guardar progreso</p>
+        <input type="text" id="username-input" placeholder="Nombre de guerrero...">
+        <button class="btn-upgrade" style="width: 80%; padding: 15px;" onclick="doLogin()">ENTRAR</button>
+    </div>
+
+    <header>
+        <div id="user-display" style="font-family:'Bangers'; font-size: 20px; color: var(--gold);">JUGADOR</div>
+        <div class="currency">
+            <span>💰 <span id="gold-val">0</span></span>
+            <span>🏆 <span id="trophies-val">0</span></span>
+        </div>
+    </header>
+
+    <div id="page-container">
+        <div id="home-view" class="view active-view">
+            <div style="background: linear-gradient(145deg, #34495e, #1e272e); border-radius: 20px; padding: 30px; text-align: center; border: 3px solid var(--gold);">
+                <h2 id="arena-name" style="font-family:'Bangers'; font-size: 35px; margin: 0;">ESTADIO DUENDE</h2>
+                <p>Arena <span id="arena-num">1</span></p>
+                <button class="btn-upgrade" style="font-size: 30px; padding: 10px 40px; font-family:'Bangers';" onclick="startBattle()">¡BATALLA!</button>
+            </div>
+            <h3 style="margin-top:20px;">Cofres</h3>
+            <div id="chests" style="display:flex; gap:10px; justify-content: space-around;"></div>
+        </div>
+
+        <div id="deck-view" class="view">
+            <h2 style="font-family:'Bangers'; text-align: center;">MI COLECCIÓN (<span id="deck-count">0</span>/4)</h2>
+            <div class="card-grid" id="card-list"></div>
+        </div>
+
+        <div id="shop-view" class="view">
+            <h2 style="font-family:'Bangers'; text-align: center;">MEJORAS (UPGRADES)</h2>
+            <div id="shop-list"></div>
+        </div>
+
+        <div id="pass-view" class="view">
+            <h2 style="font-family:'Bangers'; text-align: center;">PASE REAL</h2>
+            <div id="pass-list"></div>
+        </div>
+    </div>
+
+    <nav>
+        <div class="nav-item" onclick="showView('shop', this)"><span>🛒</span>TIENDA</div>
+        <div class="nav-item" onclick="showView('deck', this)"><span>🃏</span>MAZOS</div>
+        <div class="nav-item active" onclick="showView('home', this)"><span>⚔️</span>INICIO</div>
+        <div class="nav-item" onclick="showView('pass', this)"><span>🏆</span>PASE</div>
+    </nav>
+
+    <div id="battle-overlay">
+        <div id="three-container"></div>
+        <div class="battle-ui">
+            <div id="elixir-container" style="height:10px; background:#444; border-radius:5px;"><div id="elixir-bar" style="height:100%; background:var(--purple); width:0%;"></div></div>
+            <div id="battle-hand" style="display:flex; gap:10px; justify-content: center;"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- DATOS Y CARTAS ---
+    const CARDS = [
+        { id: 0, name: "Caballero", emoji: "⚔️", rarity: "bronz", cost: 3, hp: 1400, dmg: 160, arena: 1, lvl: 1 },
+        { id: 1, name: "Archeras", emoji: "🏹", rarity: "bronz", cost: 3, hp: 600, dmg: 90, arena: 1, lvl: 1 },
+        { id: 2, name: "Gigante", emoji: "🧔", rarity: "silv", cost: 5, hp: 3500, dmg: 210, arena: 1, lvl: 1 },
+        { id: 3, name: "Mini PEKKA", emoji: "🤖", rarity: "silv", cost: 4, hp: 1100, dmg: 600, arena: 2, lvl: 1 },
+        { id: 4, name: "Valquiria", emoji: "🪓", rarity: "silv", cost: 4, hp: 1500, dmg: 220, arena: 2, lvl: 1 },
+        { id: 5, name: "Príncipe", emoji: "🏇", rarity: "gold", cost: 5, hp: 1800, dmg: 350, arena: 3, lvl: 1 },
+        { id: 6, name: "Mago", emoji: "🔥", rarity: "gold", cost: 5, hp: 700, dmg: 240, arena: 3, lvl: 1 },
+        { id: 7, name: "P.E.K.K.A", emoji: "🦾", rarity: "gold", cost: 7, hp: 3800, dmg: 800, arena: 4, lvl: 1 },
+        { id: 8, name: "Megacaballero", emoji: "🛡️", rarity: "diam", cost: 7, hp: 3500, dmg: 250, arena: 5, lvl: 1 },
+        { id: 9, name: "Chispitas", emoji: "⚡", rarity: "diam", cost: 6, hp: 1200, dmg: 1200, arena: 4, lvl: 1 }
+        // ... (puedes añadir las otras 10 cartas siguiendo este formato)
+    ];
+
+    let state = {
+        user: "", gold: 500, trophies: 0, deck: [0, 1, 2], lvlData: {}, arena: 1
+    };
+
+    // --- LÓGICA DE LOGIN Y GUARDADO ---
+    function doLogin() {
+        const name = document.getElementById('username-input').value;
+        if(!name) return alert("Escribe un nombre");
+        
+        state.user = name;
+        const saved = localStorage.getItem('mashRoyale_' + name);
+        if(saved) state = JSON.parse(saved);
+        
+        document.getElementById('login-screen').style.display = 'none';
+        updateUI();
+    }
+
+    function save() {
+        localStorage.setItem('mashRoyale_' + state.user, JSON.stringify(state));
+    }
+
+    // --- NAVEGACIÓN ---
+    function showView(viewId, el) {
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active-view'));
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        document.getElementById(viewId + '-view').classList.add('active-view');
+        el.classList.add('active');
+        if(viewId === 'deck') renderDeck();
+        if(viewId === 'shop') renderShop();
+        if(viewId === 'pass') renderPass();
+    }
+
+    // --- RENDERIZADO DE PÁGINAS ---
+    function renderDeck() {
+        const grid = document.getElementById('card-list');
+        grid.innerHTML = CARDS.map(c => {
+            const lvl = state.lvlData[c.id] || 1;
+            return `
+                <div class="card rare-${c.rarity} ${state.deck.includes(c.id) ? 'in-deck' : ''}" onclick="toggleDeck(${c.id})">
+                    <div class="lvl-tag">Lvl ${lvl}</div>
+                    <div style="font-size:30px">${c.emoji}</div>
+                    <div style="font-size:10px; font-weight:800">${c.name.toUpperCase()}</div>
+                </div>
+            `;
+        }).join('');
+        document.getElementById('deck-count').innerText = state.deck.length;
+    }
+
+    function toggleDeck(id) {
+        const idx = state.deck.indexOf(id);
+        if(idx > -1) state.deck.splice(idx, 1);
+        else if(state.deck.length < 4) state.deck.push(id);
+        renderDeck();
+        save();
+    }
+
+    function renderShop() {
+        const list = document.getElementById('shop-list');
+        list.innerHTML = CARDS.map(c => {
+            const lvl = state.lvlData[c.id] || 1;
+            const cost = lvl * 200;
+            return `
+                <div class="shop-item">
+                    <div><b>Upgrade ${c.name}</b><br><small>Lvl ${lvl} → ${lvl+1}</small></div>
+                    <button class="btn-upgrade" onclick="buyUpgrade(${c.id}, ${cost})">💰 ${cost}</button>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function buyUpgrade(id, cost) {
+        if(state.gold >= cost) {
+            state.gold -= cost;
+            state.lvlData[id] = (state.lvlData[id] || 1) + 1;
+            updateUI();
+            renderShop();
+            save();
+        }
+    }
+
+    function renderPass() {
+        const list = document.getElementById('pass-list');
+        const levels = [0, 400, 800, 1200, 1600];
+        list.innerHTML = levels.map((cup, i) => `
+            <div class="pass-row ${state.trophies < cup ? 'locked' : ''}">
+                <span>Nivel ${i+1} (${cup} 🏆)</span>
+                <b>${i % 2 == 0 ? '🎁 Cofre' : '💰 500 Oro'}</b>
+            </div>
+        `).join('');
+    }
+
+    function updateUI() {
+        document.getElementById('user-display').innerText = state.user;
+        document.getElementById('gold-val').innerText = state.gold;
+        document.getElementById('trophies-val').innerText = state.trophies;
+    }
+
+    // --- BATALLA 3D (REDUCIDA PARA EL EJEMPLO) ---
+    let scene, camera, renderer, battleElixir = 0;
+    function startBattle() {
+        if(state.deck.length < 4) return alert("Selecciona 4 cartas en el mazo");
+        document.getElementById('battle-overlay').style.display = 'block';
+        init3D();
+    }
+
+    function init3D() {
+        scene = new THREE.Scene(); scene.background = new THREE.Color(0x27ae60);
+        camera = new THREE.PerspectiveCamera(75, 480/800, 0.1, 1000);
+        renderer = new THREE.WebGLRenderer();
+        renderer.setSize(480, window.innerHeight - 140);
+        document.getElementById('three-container').innerHTML = "";
+        document.getElementById('three-container').appendChild(renderer.domElement);
+        
+        const light = new THREE.AmbientLight(0xffffff); scene.add(light);
+        camera.position.set(0, 20, 20); camera.lookAt(0,0,0);
+        
+        renderBattleHand();
+        loop();
+    }
+
+    function renderBattleHand() {
+        const hand = document.getElementById('battle-hand');
+        hand.innerHTML = state.deck.map(id => {
+            const c = CARDS.find(x => x.id === id);
+            return `<div style="background:#34495e; padding:10px; border-radius:8px; border:2px solid white;" onclick="deploy(${id})">${c.emoji}</div>`;
+        }).join('');
+    }
+
+    function loop() {
+        if(document.getElementById('battle-overlay').style.display === 'none') return;
+        requestAnimationFrame(loop);
+        battleElixir = Math.min(10, battleElixir + 0.01);
+        document.getElementById('elixir-bar').style.width = (battleElixir * 10) + "%";
+        renderer.render(scene, camera);
+    }
+
+    function deploy(id) {
+        const c = CARDS.find(x => x.id === id);
+        if(battleElixir >= c.cost) {
+            battleElixir -= c.cost;
+            // Simulación de victoria rápida para probar
+            setTimeout(() => endBattle(true), 2000);
+        }
+    }
+
+    function endBattle(win) {
+        document.getElementById('battle-overlay').style.display = 'none';
+        if(win) {
+            state.trophies += 30; state.gold += 100;
+            alert("¡VICTORIA!");
+        }
+        updateUI();
+        save();
+    }
+</script>
+</body>
+</html>
